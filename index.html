@@ -259,71 +259,7 @@
       border-color: rgba(255,255,255,0.15);
     }
 
-    /* iOS style Switches */
-    .switch-group {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 15px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-    }
-
-    .switch-group:last-child {
-      border-bottom: none;
-    }
-
-    .switch-label {
-      font-weight: 600;
-      font-size: 1rem;
-    }
-
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 56px;
-      height: 30px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider-round {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #0f1225;
-      transition: .3s;
-      border-radius: 30px;
-      border: 1px solid var(--card-border);
-    }
-
-    .slider-round:before {
-      position: absolute;
-      content: "";
-      height: 22px;
-      width: 22px;
-      left: 3px;
-      bottom: 3px;
-      background-color: #64748b;
-      transition: .3s;
-      border-radius: 50%;
-    }
-
-    input:checked + .slider-round {
-      background-color: rgba(0, 242, 254, 0.15);
-      border-color: var(--accent-secondary);
-    }
-
-    input:checked + .slider-round:before {
-      transform: translateX(26px);
-      background-color: var(--accent-secondary);
-      box-shadow: 0 0 10px var(--accent-secondary);
-    }
-
-    /* LED Configuration Row */
+    /* Segmented Control Layouts */
     .led-control-row {
       background: #0f1225;
       border: 1px solid var(--card-border);
@@ -331,6 +267,11 @@
       border-radius: 12px;
       display: flex;
       flex-direction: column;
+      margin-bottom: 15px;
+    }
+
+    .led-control-row:last-child {
+      margin-bottom: 0;
     }
 
     .led-info {
@@ -427,7 +368,7 @@
       100% { background-position: -200% 50%; }
     }
 
-    /* Climate Display Layout */
+    /* Diagnostics Display */
     .climate-display {
       display: grid;
       grid-template-columns: repeat(1, 1fr);
@@ -457,7 +398,7 @@
       color: #fff;
     }
 
-    /* Warning Panels */
+    /* Warnings */
     .alert-panel {
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.2);
@@ -534,29 +475,39 @@
     <!-- STATION POWER SWITCHES (MOSFETS) -->
     <div class="card disabled" id="card-mosfets">
       <h2>🔌 Station Power Switches (MOSFET Rails)</h2>
-      <div class="card-subtitle">Control the hardware power delivery to peripheral modules.</div>
+      <div class="card-subtitle">Control the hardware power delivery to peripheral modules. Includes timer schedules (18:00 - 05:00).</div>
       
-      <div class="switch-group">
-        <span class="switch-label">Signboard Power (5V)</span>
-        <label class="switch">
-          <input type="checkbox" id="m5_switch" onchange="toggleMosfet('m5', this.checked)">
-          <span class="slider-round"></span>
-        </label>
+      <!-- SIGNBOARD POWER (5V) -->
+      <div class="led-control-row">
+        <div class="led-info">
+          <span class="led-title">Signboard Power (5V) — Horror Flicker Effect</span>
+          <span class="led-status-badge" id="m5-status-badge">Off</span>
+        </div>
+        <div class="btn-group">
+          <button class="mode-btn" id="btn-m5-0" onclick="setMosfetMode('m5', 0)">OFF</button>
+          <button class="mode-btn" id="btn-m5-1" onclick="setMosfetMode('m5', 1)">ON</button>
+          <button class="mode-btn" id="btn-m5-2" onclick="setMosfetMode('m5', 2)">AUTO</button>
+        </div>
       </div>
 
-      <div class="switch-group">
-        <span class="switch-label">Cabinet LED Strip Power (12V)</span>
-        <label class="switch">
-          <input type="checkbox" id="m12_switch" onchange="toggleMosfet('m12', this.checked)">
-          <span class="slider-round"></span>
-        </label>
+      <!-- LED STRIP POWER (12V) -->
+      <div class="led-control-row">
+        <div class="led-info">
+          <span class="led-title">Cabinet LED Strip Power (12V)</span>
+          <span class="led-status-badge" id="m12-status-badge">Off</span>
+        </div>
+        <div class="btn-group">
+          <button class="mode-btn" id="btn-m12-0" onclick="setMosfetMode('m12', 0)">OFF</button>
+          <button class="mode-btn" id="btn-m12-1" onclick="setMosfetMode('m12', 1)">ON</button>
+          <button class="mode-btn" id="btn-m12-2" onclick="setMosfetMode('m12', 2)">AUTO</button>
+        </div>
       </div>
     </div>
 
     <!-- STRIP 1 ILLUMINATION -->
     <div class="card disabled" id="card-leds">
       <h2>✨ Station Illumination (Addressable Strip)</h2>
-      <div class="card-subtitle">Configure the lighting animation and monitor live output.</div>
+      <div class="card-subtitle">Configure the lighting animation and monitor live output. Includes timer schedules (18:00 - 05:00).</div>
       
       <div class="led-control-row">
         <div class="led-info">
@@ -587,7 +538,9 @@
 
   </div>
 
-  <script>
+  <script {
+    nonce: ""
+  }>
     // --- BLUETOOTH UUID PARAMETERS ---
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'; // Nordic UART Service
     const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';      // Write commands
@@ -708,6 +661,17 @@
         badge.innerText = "Off";
       }
 
+      // Reset MOSFET statuses
+      document.getElementById('m5-status-badge').className = "led-status-badge";
+      document.getElementById('m5-status-badge').innerText = "Off";
+      document.getElementById('m5-status-badge').style.background = "";
+      document.getElementById('m5-status-badge').style.color = "";
+
+      document.getElementById('m12-status-badge').className = "led-status-badge";
+      document.getElementById('m12-status-badge').innerText = "Off";
+      document.getElementById('m12-status-badge').style.background = "";
+      document.getElementById('m12-status-badge').style.color = "";
+
       bluetoothDevice = null;
       rxCharacteristic = null;
       txCharacteristic = null;
@@ -720,7 +684,7 @@
       const str = decoder.decode(value);
       console.log("[BLE RX] Notification: " + str);
 
-      // String format: c:22:25:00,m5:1,m12:0,l1:1,r1:2
+      // String format: c:22:25:00,m5:2,m12:2,l1:1,r1:2,s5:1,s12:1
       const parts = str.split(',');
       parts.forEach(part => {
         const kv = part.split(':');
@@ -731,9 +695,11 @@
           if (key === 'c') {
             document.getElementById('board-time').innerText = val;
           } else if (key === 'm5') {
-            document.getElementById('m5_switch').checked = val === '1';
+            const mode = parseInt(val);
+            updateMosfetButtonSelection('m5', mode);
           } else if (key === 'm12') {
-            document.getElementById('m12_switch').checked = val === '1';
+            const mode = parseInt(val);
+            updateMosfetButtonSelection('m12', mode);
           } else if (key === 'l1') {
             const isActive = val === '1';
             const bar = document.getElementById('led1-bar');
@@ -758,15 +724,61 @@
             const mode = parseInt(val);
             currentLedMode = mode;
             updateButtonSelection(mode);
+          } else if (key === 's5') {
+            const isActive = val === '1';
+            const badge = document.getElementById('m5-status-badge');
+            if (badge) {
+              if (isActive) {
+                badge.classList.add('active');
+                badge.innerText = "Flickering";
+                badge.style.background = "rgba(255, 94, 98, 0.15)";
+                badge.style.color = "var(--danger-color)";
+              } else {
+                badge.classList.remove('active');
+                badge.innerText = "Off";
+                badge.style.background = "";
+                badge.style.color = "";
+              }
+            }
+          } else if (key === 's12') {
+            const isActive = val === '1';
+            const badge = document.getElementById('m12-status-badge');
+            if (badge) {
+              if (isActive) {
+                badge.classList.add('active');
+                badge.innerText = "On";
+                badge.style.background = "rgba(0, 255, 208, 0.15)";
+                badge.style.color = "var(--success-color)";
+              } else {
+                badge.classList.remove('active');
+                badge.innerText = "Off";
+                badge.style.background = "";
+                badge.style.color = "";
+              }
+            }
           }
         }
       });
     }
 
-    // Highlight active mode buttons
+    // Highlight active mode buttons for LED strip
     function updateButtonSelection(mode) {
       for (let m = 0; m < 3; m++) {
         const btn = document.getElementById('btn-led1-' + m);
+        if (btn) {
+          if (m === mode) {
+            btn.classList.add('selected');
+          } else {
+            btn.classList.remove('selected');
+          }
+        }
+      }
+    }
+
+    // Highlight active mode buttons for MOSFETs
+    function updateMosfetButtonSelection(id, mode) {
+      for (let m = 0; m < 3; m++) {
+        const btn = document.getElementById('btn-' + id + '-' + m);
         if (btn) {
           if (m === mode) {
             btn.classList.add('selected');
@@ -782,6 +794,12 @@
       currentLedMode = mode;
       sendCommand('m1:' + mode);
       updateButtonSelection(mode);
+    }
+
+    // Set MOSFET mode via UI
+    function setMosfetMode(id, mode) {
+      sendCommand(id + ':' + mode);
+      updateMosfetButtonSelection(id, mode);
     }
 
     // Send payload over BLE
@@ -815,7 +833,6 @@
     }
 
     // --- SLIDER VALUE SYNCHRONIZATION ---
-
     function syncServo1(val) {
       val = parseInt(val);
       if (isNaN(val)) return;
@@ -826,11 +843,6 @@
       document.getElementById('s1_num').value = val;
       
       sendCommandThrottled('s1:' + val);
-    }
-
-    function toggleMosfet(id, checked) {
-      const state = checked ? '1' : '0';
-      sendCommand((id === 'm5' ? 'm5' : 'm12') + ':' + state);
     }
   </script>
 </body>

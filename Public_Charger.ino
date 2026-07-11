@@ -42,17 +42,29 @@ unsigned long lastServoTime = 0;
 unsigned long lastTxTime = 0;
 const unsigned long TX_INTERVAL = 2000; 
 
-// --- CONTROLS ---
-// 0 - OFF, 1 - Idle (Cyan), 2 - Charging Flow Animation
-int mode_led1 = 2; 
+// --- CONTROLS AND MODES ---
+// 0 - Force OFF, 1 - Force ON, 2 - AUTO (Timer schedule 18:00 - 05:00)
+int mode_led1 = 2;      // Addressable strip
+int mode_mosfet5 = 2;   // 5V MOSFET (Signboard)
+int mode_mosfet12 = 2;  // 12V MOSFET (LED Strip)
+
+// Active states (determined by mode and time schedule)
 bool is_led1_active = false;
+bool is_m5_active = false;
+bool is_m12_active = false;
+
+// Transition trackers
 bool prev_led1_active = false;
 
 unsigned long lastLedAnimTime = 0;
 float phase = 0.0;
 
-bool m5_state = false;  // Signboard status
-bool m12_state = false; // LED Strip status
+// --- FLICKERING LOGIC VARIABLES (Horror movie style for 5V Signboard) ---
+unsigned long nextFlickerTime = 0;
+unsigned long flickerEndTime = 0;
+bool isFlickering = false;
+unsigned long lastFlickerToggleTime = 0;
+int flickerState = HIGH;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -86,14 +98,12 @@ class MyCallbacks: public BLECharacteristicCallbacks {
             Serial.printf("  - Servo 1 target: %d us\n", s1_target_us);
           }
           else if (key == "m5") {
-            m5_state = (val == "1");
-            digitalWrite(MOSFET_5V, m5_state ? HIGH : LOW);
-            Serial.printf("  - Signboard (MOSFET 5V): %s\n", m5_state ? "ON" : "OFF");
+            mode_mosfet5 = val.toInt();
+            Serial.printf("  - Signboard (5V) Mode: %s\n", mode_mosfet5 == 2 ? "AUTO" : (mode_mosfet5 == 1 ? "ON" : "OFF"));
           }
           else if (key == "m12") {
-            m12_state = (val == "1");
-            digitalWrite(MOSFET_12V, m12_state ? HIGH : LOW);
-            Serial.printf("  - LED Strip (MOSFET 12V): %s\n", m12_state ? "ON" : "OFF");
+            mode_mosfet12 = val.toInt();
+            Serial.printf("  - LED Strip (12V) Mode: %s\n", mode_mosfet12 == 2 ? "AUTO" : (mode_mosfet12 == 1 ? "ON" : "OFF"));
           }
           else if (key == "m1") {
             mode_led1 = val.toInt();
@@ -117,6 +127,66 @@ class MyCallbacks: public BLECharacteristicCallbacks {
       }
     }
 };
+
+// Evaluate schedule (active between 18:00 and 05:00)
+bool isScheduleActive() {
+  time_t now;
+  struct tm timeinfo;
+  time(&now);
+  if (now < 1000000) {
+    // Default to active if clock not yet synchronized via BLE
+    return true; 
+  }
+  localtime_r(&now, &timeinfo);
+  int hour = timeinfo.tm_hour;
+  if (hour >= 18 || hour < 5) {
+    return true;
+  }
+  return false;
+}
+
+// Film-style flickering effect for 5V Neon Signboard
+void updateSignboardFlicker(unsigned long currentMillis, bool active) {
+  if (!active) {
+    digitalWrite(MOSFET_5V, LOW);
+    isFlickering = false;
+    return;
+  }
+
+  // Normal state is solid ON
+  if (!isFlickering) {
+    digitalWrite(MOSFET_5V, HIGH);
+    
+    // Set next flicker burst interval (randomly between 15 to 45 seconds)
+    if (nextFlickerTime == 0) {
+      nextFlickerTime = currentMillis + random(15000, 45000);
+    }
+    
+    if (currentMillis >= nextFlickerTime) {
+      isFlickering = true;
+      // Flicker burst duration: 250ms to 800ms
+      flickerEndTime = currentMillis + random(250, 800);
+      lastFlickerToggleTime = currentMillis;
+      flickerState = LOW;
+      digitalWrite(MOSFET_5V, flickerState);
+    }
+  } else {
+    // Active flicker burst
+    if (currentMillis >= flickerEndTime) {
+      isFlickering = false;
+      digitalWrite(MOSFET_5V, HIGH); // Restore solid ON
+      // Schedule next burst
+      nextFlickerTime = currentMillis + random(15000, 45000);
+    } else {
+      // Rapidly toggle state at irregular intervals (35ms to 110ms)
+      if (currentMillis - lastFlickerToggleTime >= random(35, 110)) {
+        lastFlickerToggleTime = currentMillis;
+        flickerState = !flickerState;
+        digitalWrite(MOSFET_5V, flickerState ? HIGH : LOW);
+      }
+    }
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -195,12 +265,23 @@ void loop() {
     }
   }
 
-  // --- LED1 CONTROL LOGIC ---
-  is_led1_active = (mode_led1 != 0);
+  // --- EVALUATE SCHEDULE & MODES ---
+  bool sched = isScheduleActive();
 
+  is_led1_active = (mode_led1 == 1 || (mode_led1 == 2 && sched));
+  is_m5_active  = (mode_mosfet5 == 1 || (mode_mosfet5 == 2 && sched));
+  is_m12_active = (mode_mosfet12 == 1 || (mode_mosfet12 == 2 && sched));
+
+  // --- MOSFET 12V CONTROL (LED Strip) ---
+  digitalWrite(MOSFET_12V, is_m12_active ? HIGH : LOW);
+
+  // --- MOSFET 5V CONTROL (Signboard with Horror Flicker) ---
+  updateSignboardFlicker(currentMillis, is_m5_active);
+
+  // --- ADDRESSABLE LED1 CONTROL (40 LEDs) ---
   if (is_led1_active) {
     if (mode_led1 == 2) {
-      // Charging Wave Animation (Green/Blue pulses running along 40 LEDs)
+      // Charging Flow Animation (Green/Blue pulses running along 40 LEDs)
       if (currentMillis - lastLedAnimTime >= 30) {
         lastLedAnimTime = currentMillis;
         phase += 0.08;
@@ -214,7 +295,7 @@ void loop() {
         strip1.show();
       }
     } else {
-      // Solid Cyan/White
+      // Solid Cyan/White Status
       if (!prev_led1_active || (mode_led1 == 1 && prev_led1_active && strip1.getPixelColor(0) == 0)) {
         for (int i = 0; i < LED1_COUNT; i++) strip1.setPixelColor(i, strip1.Color(0, 180, 200)); // Cyan
         strip1.show();
@@ -244,15 +325,17 @@ void loop() {
       }
       
       // Payload format:
-      // c:Clock,m5:Signboard(0/1),m12:LEDStrip(0/1),l1:LED1Active(0/1),r1:LED1Mode(0/1/2)
-      char txBuffer[64];
+      // c:Clock,m5:Mode5V(0/1/2),m12:Mode12V(0/1/2),l1:LED1Active(0/1),r1:LED1Mode(0/1/2),s5:Phys5V(0/1),s12:Phys12V(0/1)
+      char txBuffer[96];
       snprintf(txBuffer, sizeof(txBuffer), 
-               "c:%s,m5:%d,m12:%d,l1:%d,r1:%d", 
+               "c:%s,m5:%d,m12:%d,l1:%d,r1:%d,s5:%d,s12:%d", 
                timeStr, 
-               m5_state ? 1 : 0, 
-               m12_state ? 1 : 0, 
+               mode_mosfet5, 
+               mode_mosfet12, 
                is_led1_active ? 1 : 0, 
-               mode_led1);
+               mode_led1,
+               is_m5_active ? 1 : 0,
+               is_m12_active ? 1 : 0);
       
       pTxCharacteristic->setValue((uint8_t*)txBuffer, strlen(txBuffer));
       pTxCharacteristic->notify();
