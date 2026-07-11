@@ -157,15 +157,15 @@ void updateSignboardFlicker(unsigned long currentMillis, bool active) {
   if (!isFlickering) {
     digitalWrite(MOSFET_5V, HIGH);
     
-    // Set next flicker burst interval (randomly between 15 to 45 seconds)
+    // Set next flicker burst interval (frequent: randomly between 5 to 10 seconds)
     if (nextFlickerTime == 0) {
-      nextFlickerTime = currentMillis + random(15000, 45000);
+      nextFlickerTime = currentMillis + random(5000, 10000);
     }
     
     if (currentMillis >= nextFlickerTime) {
       isFlickering = true;
-      // Flicker burst duration: 250ms to 800ms
-      flickerEndTime = currentMillis + random(250, 800);
+      // Longer flicker burst duration for clear visibility: 1000ms to 2500ms
+      flickerEndTime = currentMillis + random(1000, 2500);
       lastFlickerToggleTime = currentMillis;
       flickerState = LOW;
       digitalWrite(MOSFET_5V, flickerState);
@@ -176,10 +176,10 @@ void updateSignboardFlicker(unsigned long currentMillis, bool active) {
       isFlickering = false;
       digitalWrite(MOSFET_5V, HIGH); // Restore solid ON
       // Schedule next burst
-      nextFlickerTime = currentMillis + random(15000, 45000);
+      nextFlickerTime = currentMillis + random(5000, 10000);
     } else {
-      // Rapidly toggle state at irregular intervals (35ms to 110ms)
-      if (currentMillis - lastFlickerToggleTime >= random(35, 110)) {
+      // Rapidly toggle state at irregular intervals (25ms to 120ms)
+      if (currentMillis - lastFlickerToggleTime >= random(25, 120)) {
         lastFlickerToggleTime = currentMillis;
         flickerState = !flickerState;
         digitalWrite(MOSFET_5V, flickerState ? HIGH : LOW);
