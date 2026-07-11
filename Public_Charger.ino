@@ -2,6 +2,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <DHT.h>
 #include <Adafruit_NeoPixel.h>
 #include <ESP32Servo.h>
 #include <sys/time.h>
@@ -19,6 +20,7 @@ bool oldDeviceConnected = false;
 
 // --- PIN MAPPING ---
 #define SERVO1_PIN    0
+#define DHT_PIN       2  // DHT22 Climate Sensor
 #define MOSFET_5V     4  // controls "Signboard" (Вывеска)
 #define MOSFET_12V    5  // controls "LED Strip" (Светолента)
 #define LED1_PIN      9  // Addressable strip data pin
@@ -26,6 +28,7 @@ bool oldDeviceConnected = false;
 // --- LED CONFIGURATION ---
 #define LED1_COUNT    40
 
+DHT dht(DHT_PIN, DHT22);
 Servo servo1;
 Adafruit_NeoPixel strip1(LED1_COUNT, LED1_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -217,6 +220,10 @@ void setup() {
   servo1.writeMicroseconds(s1_current_us);
   Serial.printf("[System] Default Servo 1 position: %d us\n", s1_current_us);
 
+  // Initialize DHT22
+  dht.begin();
+  Serial.println("[System] DHT22 sensor initialized");
+
   // Initialize BLE Device
   BLEDevice::init("Public Charger");
   pServer = BLEDevice::createServer();
@@ -321,6 +328,11 @@ void loop() {
     if (currentMillis - lastTxTime >= TX_INTERVAL) {
       lastTxTime = currentMillis;
       
+      float t = dht.readTemperature();
+      float h = dht.readHumidity();
+      if (isnan(t)) t = 0.0;
+      if (isnan(h)) h = 0.0;
+      
       time_t now;
       struct tm timeinfo;
       time(&now);
@@ -332,11 +344,11 @@ void loop() {
       }
       
       // Payload format:
-      // c:Clock,m5:Mode5V(0/1/2),m12:Mode12V(0/1/2),l1:LED1Active(0/1),r1:LED1Mode(0/1/2),s5:Phys5V(0/1),s12:Phys12V(0/1)
+      // t:Temp,h:Hum,c:Clock,m5:Mode5V(0/1/2),m12:Mode12V(0/1/2),l1:LED1Active(0/1),r1:LED1Mode(0/1/2),s5:Phys5V(0/1),s12:Phys12V(0/1)
       char txBuffer[96];
       snprintf(txBuffer, sizeof(txBuffer), 
-               "c:%s,m5:%d,m12:%d,l1:%d,r1:%d,s5:%d,s12:%d", 
-               timeStr, 
+               "t:%.1f,h:%.1f,c:%s,m5:%d,m12:%d,l1:%d,r1:%d,s5:%d,s12:%d", 
+               t, h, timeStr, 
                mode_mosfet5, 
                mode_mosfet12, 
                is_led1_active ? 1 : 0, 

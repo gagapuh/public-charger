@@ -371,7 +371,8 @@
     /* Diagnostics Display */
     .climate-display {
       display: grid;
-      grid-template-columns: repeat(1, 1fr);
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
     }
 
     .climate-box {
@@ -396,6 +397,13 @@
       font-size: 2.2rem;
       font-weight: 800;
       color: #fff;
+    }
+
+    .climate-unit {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--accent-secondary);
+      margin-left: 2px;
     }
 
     /* Warnings */
@@ -525,11 +533,19 @@
 
     <!-- TELEMETRY & SYSTEM TIME -->
     <div class="card disabled" id="card-climate">
-      <h2>⏱️ System Diagnostics</h2>
-      <div class="card-subtitle">Internal clock updates from the microcontroller in real-time.</div>
+      <h2>🌡️ Climate Telemetry & System Diagnostics</h2>
+      <div class="card-subtitle">DHT22 readings and internal clock updates from the microcontroller in real-time.</div>
       
       <div class="climate-display">
         <div class="climate-box">
+          <div class="climate-label">Temperature</div>
+          <span class="climate-val" id="temp">--</span><span class="climate-unit">°C</span>
+        </div>
+        <div class="climate-box">
+          <div class="climate-label">Humidity</div>
+          <span class="climate-val" id="hum">--</span><span class="climate-unit">%</span>
+        </div>
+        <div class="climate-box" style="grid-column: span 2; margin-top: 10px;">
           <div class="climate-label">ESP32 Board Internal Time</div>
           <span class="climate-val" id="board-time" style="color: var(--accent-secondary);">--:--:--</span>
         </div>
@@ -538,9 +554,7 @@
 
   </div>
 
-  <script {
-    nonce: ""
-  }>
+  <script>
     // --- BLUETOOTH UUID PARAMETERS ---
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'; // Nordic UART Service
     const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';      // Write commands
@@ -650,6 +664,8 @@
       setControlsEnabled(false);
 
       // Reset values
+      document.getElementById('temp').innerText = "--";
+      document.getElementById('hum').innerText = "--";
       document.getElementById('board-time').innerText = "--:--:--";
       
       // Reset visual bars
@@ -684,7 +700,7 @@
       const str = decoder.decode(value);
       console.log("[BLE RX] Notification: " + str);
 
-      // String format: c:22:25:00,m5:2,m12:2,l1:1,r1:2,s5:1,s12:1
+      // String format: t:24.5,h:55.2,c:22:25:00,m5:2,m12:2,l1:1,r1:2,s5:1,s12:1
       const parts = str.split(',');
       parts.forEach(part => {
         const kv = part.split(':');
@@ -692,7 +708,11 @@
           const key = kv[0];
           const val = kv.slice(1).join(':');
           
-          if (key === 'c') {
+          if (key === 't') {
+            document.getElementById('temp').innerText = parseFloat(val).toFixed(1);
+          } else if (key === 'h') {
+            document.getElementById('hum').innerText = parseFloat(val).toFixed(1);
+          } else if (key === 'c') {
             document.getElementById('board-time').innerText = val;
           } else if (key === 'm5') {
             const mode = parseInt(val);
