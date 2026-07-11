@@ -64,6 +64,7 @@ unsigned long nextFlickerTime = 0;
 unsigned long flickerEndTime = 0;
 bool isFlickering = false;
 unsigned long lastFlickerToggleTime = 0;
+unsigned long nextToggleDuration = 0; // Store duration of the current step
 int flickerState = HIGH;
 
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -167,6 +168,9 @@ void updateSignboardFlicker(unsigned long currentMillis, bool active) {
       // Longer flicker burst duration for clear visibility: 1000ms to 2500ms
       flickerEndTime = currentMillis + random(1000, 2500);
       lastFlickerToggleTime = currentMillis;
+      
+      // Determine the duration of the very first toggle step
+      nextToggleDuration = random(15, 200); 
       flickerState = LOW;
       digitalWrite(MOSFET_5V, flickerState);
     }
@@ -178,11 +182,14 @@ void updateSignboardFlicker(unsigned long currentMillis, bool active) {
       // Schedule next burst
       nextFlickerTime = currentMillis + random(5000, 10000);
     } else {
-      // Rapidly toggle state at irregular intervals (25ms to 120ms)
-      if (currentMillis - lastFlickerToggleTime >= random(25, 120)) {
+      // Toggle state at irregular intervals. Check against nextToggleDuration which is set once per step.
+      if (currentMillis - lastFlickerToggleTime >= nextToggleDuration) {
         lastFlickerToggleTime = currentMillis;
         flickerState = !flickerState;
         digitalWrite(MOSFET_5V, flickerState ? HIGH : LOW);
+        
+        // Generate a new random duration for the next toggle step (15ms up to 200ms)
+        nextToggleDuration = random(15, 200); 
       }
     }
   }
