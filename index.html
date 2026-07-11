@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Public Charger BLE Control Center</title>
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: rgba(20, 24, 45, 0.75);
+      --card-border: rgba(255, 255, 255, 0.05);
+      --text-color: #f1f5f9;
+      --accent-color: #39ff14; /* Charging Green */
+      --accent-secondary: #00f2fe; /* Glowing Cyan */
+      --danger-color: #ff5e62;
+      --warning-color: #ffb13b;
+      --success-color: #00ffd0;
+      --shadow-color: rgba(57, 255, 20, 0.2);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-color);
+      background-image: radial-gradient(circle at 50% 0%, #171d37 0%, #0b0f19 80%);
+      color: var(--text-color);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 750px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 30%, #a5f3fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    p.subtitle {
+      color: #94a3b8;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+
+    /* Connection Status Bar */
+    .status-panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      padding: 15px 20px;
+      border-radius: 16px;
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .status-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: var(--danger-color);
+      box-shadow: 0 0 10px var(--danger-color);
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.connected {
+      background-color: var(--success-color);
+      box-shadow: 0 0 10px var(--success-color);
+    }
+
+    .status-dot.connecting {
+      background-color: var(--warning-color);
+      box-shadow: 0 0 10px var(--warning-color);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+
+    #status-text {
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .btn-connect {
+      background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-color) 100%);
+      color: #000;
+      border: none;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px var(--shadow-color);
+      transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+
+    .btn-connect:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--shadow-color);
+      filter: brightness(1.1);
+    }
+
+    .btn-connect:active {
+      transform: translateY(0);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      padding: 24px;
+      margin-bottom: 20px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+      filter: grayscale(0.5);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 20px;
+    }
+
+    /* Sliders */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slider-header label {
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    .slider-val-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slider-val-box input[type="number"] {
+      width: 90px;
+      background: #0f1225;
+      color: #fff;
+      border: 1px solid var(--card-border);
+      padding: 8px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      outline: none;
+    }
+
+    .slider-val-box input[type="number"]:focus {
+      border-color: var(--accent-secondary);
+    }
+
+    .wide-range {
+      width: 100%;
+      height: 10px;
+      -webkit-appearance: none;
+      background: #0f1225;
+      border-radius: 5px;
+      outline: none;
+    }
+
+    .wide-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-color) 100%);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--shadow-color);
+      transition: transform 0.1s;
+    }
+
+    .wide-range::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Preset Buttons */
+    .presets {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      background: #12162f;
+      border: 1px solid var(--card-border);
+      color: #94a3b8;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      background: #1b2046;
+      color: #fff;
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    /* iOS style Switches */
+    .switch-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .switch-group:last-child {
+      border-bottom: none;
+    }
+
+    .switch-label {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 56px;
+      height: 30px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-round {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #0f1225;
+      transition: .3s;
+      border-radius: 30px;
+      border: 1px solid var(--card-border);
+    }
+
+    .slider-round:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #64748b;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider-round {
+      background-color: rgba(0, 242, 254, 0.15);
+      border-color: var(--accent-secondary);
+    }
+
+    input:checked + .slider-round:before {
+      transform: translateX(26px);
+      background-color: var(--accent-secondary);
+      box-shadow: 0 0 10px var(--accent-secondary);
+    }
+
+    /* LED Configuration Row */
+    .led-control-row {
+      background: #0f1225;
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .led-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .led-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .led-status-badge {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #64748b;
+      text-transform: uppercase;
+      transition: all 0.3s ease;
+    }
+
+    .led-status-badge.active {
+      background: rgba(57, 255, 20, 0.15);
+      color: var(--accent-color);
+    }
+
+    .btn-group {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      margin-top: 5px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      background: #141832;
+      border: none;
+      color: #64748b;
+      padding: 10px 15px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      outline: none;
+      text-align: center;
+    }
+
+    .mode-btn:not(:last-child) {
+      border-right: 1px solid var(--card-border);
+    }
+
+    .mode-btn:hover {
+      background: #1d2247;
+      color: #fff;
+    }
+
+    .mode-btn.selected {
+      background: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-color) 100%);
+      color: #000;
+    }
+
+    /* Glow Visualizer Bars */
+    .visual-bar {
+      height: 14px;
+      border-radius: 7px;
+      margin-bottom: 15px;
+      background: #151a35;
+      box-shadow: none;
+      opacity: 0.15;
+      transition: all 0.3s ease;
+    }
+
+    .visual-bar.active.idle {
+      background: var(--accent-secondary);
+      box-shadow: 0 0 14px var(--accent-secondary);
+      opacity: 1;
+    }
+
+    .visual-bar.active.charging {
+      background: linear-gradient(90deg, #39ff14 0%, #00f2fe 50%, #39ff14 100%);
+      background-size: 200% auto;
+      animation: flow 2.5s linear infinite;
+      box-shadow: 0 0 14px var(--accent-color);
+      opacity: 1;
+    }
+
+    @keyframes flow {
+      0% { background-position: 0% 50%; }
+      100% { background-position: -200% 50%; }
+    }
+
+    /* Climate Display Layout */
+    .climate-display {
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+    }
+
+    .climate-box {
+      background: #0f1225;
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      border-radius: 16px;
+      text-align: center;
+      position: relative;
+    }
+
+    .climate-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .climate-val {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* Warning Panels */
+    .alert-panel {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 25px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #f87171;
+    }
+
+    .alert-panel h3 {
+      margin: 0 0 6px 0;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .alert-panel ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Public Charger BLE Control Center</h1>
+      <p class="subtitle">Direct station hardware dashboard and calibration panel</p>
+    </header>
+
+    <!-- Browser Security Warning -->
+    <div class="alert-panel" id="security-alert">
+      <h3>⚠️ Browser Security Requirements:</h3>
+      <ul>
+        <li>Web Bluetooth API requires a secure context (<strong>HTTPS</strong>) or <strong>localhost</strong>.</li>
+        <li>On PC, you can open this local file directly in Chrome (<code>file:///...</code> address format is allowed).</li>
+        <li>On Android Chrome, serve it via HTTPS hosting (e.g., GitHub Pages) or a local server.</li>
+      </ul>
+    </div>
+
+    <!-- Connection Status Bar -->
+    <div class="status-panel">
+      <div class="status-info">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Bluetooth Disconnected</span>
+      </div>
+      <button class="btn-connect" id="btn-connect" onclick="toggleConnection()">Connect BLE</button>
+    </div>
+
+    <!-- MAIN ACTUATOR -->
+    <div class="card highlight disabled" id="card-s1">
+      <h2 style="color: var(--danger-color);">⚙️ MAIN ACTUATOR (SERVO 1 - SMOOTH STEPPING)</h2>
+      <div class="card-subtitle">Center position is 1500 us. Smooth acceleration profiles are handled by the board.</div>
+      
+      <div class="slider-container">
+        <div class="slider-header">
+          <label for="s1_slide">Pulse Width (microseconds):</label>
+          <div class="slider-val-box">
+            <input type="number" id="s1_num" min="500" max="2500" value="1500" oninput="syncServo1(this.value)">
+          </div>
+        </div>
+        
+        <input type="range" id="s1_slide" min="500" max="2500" value="1500" class="wide-range" oninput="syncServo1(this.value)">
+        
+        <div class="presets">
+          <button class="preset-btn" onclick="syncServo1(500)">Left Limit (500 us)</button>
+          <button class="preset-btn" onclick="syncServo1(1500)">Center (1500 us)</button>
+          <button class="preset-btn" onclick="syncServo1(2500)">Right Limit (2500 us)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATION POWER SWITCHES (MOSFETS) -->
+    <div class="card disabled" id="card-mosfets">
+      <h2>🔌 Station Power Switches (MOSFET Rails)</h2>
+      <div class="card-subtitle">Control the hardware power delivery to peripheral modules.</div>
+      
+      <div class="switch-group">
+        <span class="switch-label">Signboard Power (5V)</span>
+        <label class="switch">
+          <input type="checkbox" id="m5_switch" onchange="toggleMosfet('m5', this.checked)">
+          <span class="slider-round"></span>
+        </label>
+      </div>
+
+      <div class="switch-group">
+        <span class="switch-label">Cabinet LED Strip Power (12V)</span>
+        <label class="switch">
+          <input type="checkbox" id="m12_switch" onchange="toggleMosfet('m12', this.checked)">
+          <span class="slider-round"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- STRIP 1 ILLUMINATION -->
+    <div class="card disabled" id="card-leds">
+      <h2>✨ Station Illumination (Addressable Strip)</h2>
+      <div class="card-subtitle">Configure the lighting animation and monitor live output.</div>
+      
+      <div class="led-control-row">
+        <div class="led-info">
+          <span class="led-title">LED Strip 1 (40 LED)</span>
+          <span class="led-status-badge" id="led1-status-badge">Off</span>
+        </div>
+        <div class="visual-bar" id="led1-bar"></div>
+        <div class="btn-group">
+          <button class="mode-btn" id="btn-led1-0" onclick="setLedMode(0)">OFF</button>
+          <button class="mode-btn" id="btn-led1-1" onclick="setLedMode(1)">IDLE (CYAN)</button>
+          <button class="mode-btn" id="btn-led1-2" onclick="setLedMode(2)">CHARGING FLOW</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELEMETRY & SYSTEM TIME -->
+    <div class="card disabled" id="card-climate">
+      <h2>⏱️ System Diagnostics</h2>
+      <div class="card-subtitle">Internal clock updates from the microcontroller in real-time.</div>
+      
+      <div class="climate-display">
+        <div class="climate-box">
+          <div class="climate-label">ESP32 Board Internal Time</div>
+          <span class="climate-val" id="board-time" style="color: var(--accent-secondary);">--:--:--</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- BLUETOOTH UUID PARAMETERS ---
+    const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'; // Nordic UART Service
+    const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';      // Write commands
+    const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';      // Receive notifications
+
+    let bluetoothDevice = null;
+    let rxCharacteristic = null;
+    let txCharacteristic = null;
+
+    let currentLedMode = 2;
+
+    // --- THROTTLING CONSTANTS ---
+    let lastWriteTime = 0;
+    const THROTTLE_MS = 60; 
+    let writeTimeout = null;
+
+    // Hide security warning on HTTPS/Localhost
+    if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      document.getElementById('security-alert').style.display = 'none';
+    }
+
+    // Toggle card interactive states
+    function setControlsEnabled(enabled) {
+      const cards = ['card-s1', 'card-mosfets', 'card-leds', 'card-climate'];
+      cards.forEach(id => {
+        const el = document.getElementById(id);
+        if (enabled) {
+          el.classList.remove('disabled');
+        } else {
+          el.classList.add('disabled');
+        }
+      });
+    }
+
+    // Connect to BLE Device
+    async function connectBLE() {
+      const statusText = document.getElementById('status-text');
+      const statusDot = document.getElementById('status-dot');
+      const connBtn = document.getElementById('btn-connect');
+
+      statusText.innerText = "Scanning...";
+      statusDot.className = "status-dot connecting";
+
+      try {
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [SERVICE_UUID], name: "Public Charger" }]
+        });
+
+        statusText.innerText = "Connecting...";
+        const server = await bluetoothDevice.gatt.connect();
+
+        statusText.innerText = "Discovering services...";
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        statusText.innerText = "Configuring channels...";
+        rxCharacteristic = await service.getCharacteristic(RX_UUID);
+        txCharacteristic = await service.getCharacteristic(TX_UUID);
+
+        // Subscribe to notifications
+        await txCharacteristic.startNotifications();
+        txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+
+        // Sync local clock
+        await syncTime();
+
+        statusText.innerText = "Connected";
+        statusDot.className = "status-dot connected";
+        connBtn.innerText = "Disconnect";
+        setControlsEnabled(true);
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+      } catch (error) {
+        console.error(error);
+        statusText.innerText = "Error: " + error.message;
+        statusDot.className = "status-dot";
+        setControlsEnabled(false);
+      }
+    }
+
+    // Sync system time on phone with the ESP32
+    async function syncTime() {
+      const localEpoch = Math.floor((Date.now() - (new Date().getTimezoneOffset() * 60 * 1000)) / 1000);
+      console.log("[BLE TX] Time sync sent: " + localEpoch);
+      await sendCommand('time:' + localEpoch);
+    }
+
+    // Disconnect
+    function disconnectBLE() {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
+    }
+
+    function toggleConnection() {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        disconnectBLE();
+      } else {
+        connectBLE();
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById('status-text').innerText = "Connection Lost";
+      document.getElementById('status-dot').className = "status-dot";
+      document.getElementById('btn-connect').innerText = "Connect BLE";
+      setControlsEnabled(false);
+
+      // Reset values
+      document.getElementById('board-time').innerText = "--:--:--";
+      
+      // Reset visual bars
+      const bar = document.getElementById('led1-bar');
+      const badge = document.getElementById('led1-status-badge');
+      if (bar) bar.className = "visual-bar";
+      if (badge) {
+        badge.classList.remove('active');
+        badge.innerText = "Off";
+      }
+
+      bluetoothDevice = null;
+      rxCharacteristic = null;
+      txCharacteristic = null;
+    }
+
+    // Process incoming ESP32 data
+    function handleNotifications(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder('utf-8');
+      const str = decoder.decode(value);
+      console.log("[BLE RX] Notification: " + str);
+
+      // String format: c:22:25:00,m5:1,m12:0,l1:1,r1:2
+      const parts = str.split(',');
+      parts.forEach(part => {
+        const kv = part.split(':');
+        if (kv.length >= 2) {
+          const key = kv[0];
+          const val = kv.slice(1).join(':');
+          
+          if (key === 'c') {
+            document.getElementById('board-time').innerText = val;
+          } else if (key === 'm5') {
+            document.getElementById('m5_switch').checked = val === '1';
+          } else if (key === 'm12') {
+            document.getElementById('m12_switch').checked = val === '1';
+          } else if (key === 'l1') {
+            const isActive = val === '1';
+            const bar = document.getElementById('led1-bar');
+            const badge = document.getElementById('led1-status-badge');
+            if (bar && badge) {
+              if (isActive) {
+                badge.classList.add('active');
+                if (currentLedMode === 2) {
+                  bar.className = "visual-bar active charging";
+                  badge.innerText = "Charging Flow";
+                } else {
+                  bar.className = "visual-bar active idle";
+                  badge.innerText = "Idle (Cyan)";
+                }
+              } else {
+                bar.className = "visual-bar";
+                badge.classList.remove('active');
+                badge.innerText = "Off";
+              }
+            }
+          } else if (key === 'r1') {
+            const mode = parseInt(val);
+            currentLedMode = mode;
+            updateButtonSelection(mode);
+          }
+        }
+      });
+    }
+
+    // Highlight active mode buttons
+    function updateButtonSelection(mode) {
+      for (let m = 0; m < 3; m++) {
+        const btn = document.getElementById('btn-led1-' + m);
+        if (btn) {
+          if (m === mode) {
+            btn.classList.add('selected');
+          } else {
+            btn.classList.remove('selected');
+          }
+        }
+      }
+    }
+
+    // Set strip mode via UI
+    function setLedMode(mode) {
+      currentLedMode = mode;
+      sendCommand('m1:' + mode);
+      updateButtonSelection(mode);
+    }
+
+    // Send payload over BLE
+    async function sendCommand(cmd) {
+      if (!rxCharacteristic) return;
+      try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(cmd);
+        await rxCharacteristic.writeValue(data);
+        console.log("[BLE TX] Transmitted: " + cmd);
+      } catch (error) {
+        console.error("[BLE TX] Transmit error: ", error);
+      }
+    }
+
+    // Limit transmission rate to avoid BLE congestion
+    function sendCommandThrottled(cmd) {
+      const now = Date.now();
+      const elapsed = now - lastWriteTime;
+
+      if (elapsed >= THROTTLE_MS) {
+        sendCommand(cmd);
+        lastWriteTime = now;
+      } else {
+        if (writeTimeout) clearTimeout(writeTimeout);
+        writeTimeout = setTimeout(() => {
+          sendCommand(cmd);
+          lastWriteTime = Date.now();
+        }, THROTTLE_MS - elapsed);
+      }
+    }
+
+    // --- SLIDER VALUE SYNCHRONIZATION ---
+
+    function syncServo1(val) {
+      val = parseInt(val);
+      if (isNaN(val)) return;
+      if (val < 500) val = 500;
+      if (val > 2500) val = 2500;
+      
+      document.getElementById('s1_slide').value = val;
+      document.getElementById('s1_num').value = val;
+      
+      sendCommandThrottled('s1:' + val);
+    }
+
+    function toggleMosfet(id, checked) {
+      const state = checked ? '1' : '0';
+      sendCommand((id === 'm5' ? 'm5' : 'm12') + ':' + state);
+    }
+  </script>
+</body>
+</html>
