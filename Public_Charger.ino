@@ -82,6 +82,14 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
+void fillStripColor(int stripNum, byte r, byte g, byte b) {
+  // Only LED1 is addressable on this board
+  if (stripNum == 1) {
+    for(int i=0; i<LED1_COUNT; i++) strip1.setPixelColor(i, strip1.Color(r,g,b));
+    strip1.show();
+  }
+}
+
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       String cmd = pCharacteristic->getValue().c_str();
